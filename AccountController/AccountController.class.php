@@ -6,8 +6,8 @@
     class Accounts{
         private $DbContext;
        
-        public function __construct($server, $dbUser, $dbPass, $dbName, $tablePrefix = null){
-            $this->DbContext = new AccountsDatabase($server, $dbUser, $dbPass, $dbName, $tablePrefix);
+        public function __construct($hostname = null, $username = null, $password = null, $database = null, $tablePrefix = null, $port = null, $socket = null){
+            $this->DbContext = new AccountsDatabase($hostname, $username, $password, $database, $tablePrefix, $port, $socket);
         }
        
         public function GetAllUsers(){
