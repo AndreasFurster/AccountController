@@ -88,6 +88,32 @@
             }
         }
 
+        private function AddClaimIfNotExist($claimName){
+            $stmt = $this->Connection->prepare("INSERT INTO " . $this->TableNames['claims'] . " SET Claim = ?;");
+            $stmt->bind_param("s", $claimName);
+            if($stmt->execute()){
+                return $stmt->insert_id;
+            }
+            else {
+                $stmt = $this->Connection->prepare("SELECT Id FROM " . $this->TableNames['claims'] . " WHERE Claim = ?;");
+                $stmt->bind_param("s", $claimName);
+                if (!$stmt->execute()) {
+                    throw new Exception("Error by getting the id of an existing claim");
+                }
+                $stmt->bind_result($existingClaimId);
+                $stmt->fetch();
+                return $existingClaimId;
+            }
+        }
+
+        private function SetClaimForUser($userId, $claimId, $claimValue){
+            $stmt = $this->Connection->prepare("INSERT INTO " . $this->TableNames['userClaims'] . " (User_Id, Claim_Id, Claim_Value) VALUES (?, ? , ?) ON DUPLICATE KEY UPDATE Claim_Value = ?");
+            $stmt->bind_param("iiss", $userId, $claimId, $claimValue, $claimValue);
+
+
+
+        }
+
         public function InsertUser($user)
         {
             /** Map properties from User object to local scope variables */
@@ -107,7 +133,7 @@
             }
 
             /** Get just inserted full user from database */
-            $insertedUser = $this->Connection->query("SELECT * FROM " . $this->TableNames['users'] . " WHERE Id = LAST_INSERT_ID()");
+            $insertedUser = $this->Connection->query("SELECT * FROM " . $this->TableNames['users'] . " WHERE Id = " . $stmt->insert_id . ";");
             $insertedUser =  $this->MapDbRowToUser($insertedUser->fetch_object());
 
             if($roles !== null) {
@@ -121,11 +147,14 @@
             }
 
             if($claims !== null) {
-                /** Add claims if not exists */
+                foreach ($claims as $claim => $claimValue) {
+                    /** Add claims if not exists */
+                    $claimId = $this->AddClaimIfNotExist($claim);
 
-                /** Set value for claims */
+                    /** Set value for claims */
+                    
+                }
             }
-
             return $insertedUser;
         }
 
