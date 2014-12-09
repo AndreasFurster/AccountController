@@ -1,6 +1,7 @@
 <?php
 	error_reporting(E_ALL);
 	//require_once("Config/Config.inc.php");
+
 	session_start();
 
 	define("AccountControllerPath", "AccountController/");
