@@ -16,17 +16,25 @@
 
     echo "<pre>";
 
-	$admin = new User();
+	$programmer = new User();
 
-    //$admin->Id = 2;
-	$admin->Email = rand(1, 1000);
-	$admin->Username = rand(1, 1000);
-	$admin->Password = "pass";
-	$admin
-        ->AddToRole("Admin", "Member", "Moderator")
-        ->RemoveFromRole("Moderator");
+    $programmer
+        ->SetEmail(rand(1, 1000))
+        ->SetUsername("Programmer x")
+        ->SetPassword(sha1(rand(1, 1000)))
+        ->SetId(3)
 
-    var_dump($accounts->AddUser($admin));
+        ->AddToRole("Admin", "Member", "Moderator", "Documentator")
+        ->RemoveFromRole("Documentator")
+        ->RemoveFromRole("Admin")
+
+        ->AddClaim("Tel", "0612345678")
+        ->AddClaim("pizzas per week", "3")
+        ->AddClaim("Money", "5000")
+        ->AddClaim("pizzas per week", "100");
+
+    var_dump($accounts->SaveUser($programmer));
+    unset($programmer);
 
     /*
 	$example = new User();
@@ -36,26 +44,22 @@
 
     */
 
-	$users = array($admin);
+    $programmer = $accounts->GetUserByUsername("Programmer");
 
-    echo "</pre><hr>";
+    if($programmer->IsInRole("Admin")){
+        echo("I'm an admin :)");
+        if(!$programmer->IsInRole("Moderator")){
+            echo "<br>";
+            echo "But I'm not a mod! :(";
+        }
+    }
 
-	foreach ($users as $user) {
+    echo "<br>";
+    echo $programmer->Email;
+    echo "<br>";
+    echo $programmer->GetClaim("Pincode");
+    echo "<hr>";
 
-		if($user->IsInRole("Admin")){
-			echo("I'm an admin :)");
-            if(!$user->IsInRole("Moderator")){
-                echo "<br>";
-                echo "But I'm not a mod! :(";
-            }
-		}
-
-		echo "<br>";
-		echo $user->Email;
-        echo "<br>";
-        echo $user->GetClaim("Pincode");
-		echo "<hr>";
-	}
 
 
 

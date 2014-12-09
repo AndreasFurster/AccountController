@@ -15,40 +15,56 @@
         }
 
         public function GetAllUsersInRole($roleName){
-            
+            //return array(User,...)
         }
 
         public function GetUserById($id){
-            
+            //return User | null
         }
 
-        public function GetUserByUsername($id){
-            
+        public function GetUserByUsername($username){
+            //return User | null
         }
 
-        public function GetUserByEmail($id){
-            
+        public function GetUserByEmail($email){
+            //return User | null
         }
 
-        public function GetAuthenticatedUser(){
-            
+        public function UserIdExists($id){
+            //return bool
+            return true;
         }
 
-        public function GetAuthenticatedUserByUsername(){
-            
+        public function UsernameExists($username){
+            //return bool
         }
 
-        public function GetAuthenticatedUserByEmail(){
-            
+        public function EmailExists($email){
+            //return bool
         }
 
-        public function AddUser($user){
-            return $this->DbContext->InsertUser($user);
+        public function GetAuthenticatedUserById($id, $password){
+            //return User | null | false
+        }
 
+        public function GetAuthenticatedUserByUsername($username, $password){
+            //return User | null | false
+        }
+
+        public function GetAuthenticatedUserByEmail($email, $password){
+            //return User | null | false
         }
 
         public function SaveUser($user){
-            return $this->DbContext->UpdateUser($user);
+            if($user->Id !== null){
+                if($this->UserIdExists($user->Id)) {
+                    return $this->DbContext->UpdateUser($user);
+                }
+
+                return $this->SaveUser($user->Id = null);
+            }
+
+            return $this->DbContext->InsertUser($user);
         }
     }
        

@@ -32,6 +32,77 @@
             }
         }
 
+        public function SelectAllUsers()
+        {
+            $stmt = $this->Connection->prepare("SELECT * FROM " . $this->TableNames['users']);
+            $stmt->execute();
+
+            while($row = $stmt->fetch()){
+                //var_dump($row);
+            }
+        }
+
+        public function SelectSingleUser($by, $value)
+        {
+
+        }
+
+        public function InsertUser($user)
+        {
+            /** Map properties from User object to local scope variables */
+            $username = $this->CheckPropertyIsNull($user->Username, "Username");
+            $email = $this->CheckPropertyIsNull($user->Email, "Email");
+            $password = $this->EncryptPassword($this->CheckPropertyIsNull($user->Username, "Username"));
+
+            /** Insert user to database */
+            $stmt = $this->Connection->prepare("INSERT INTO " . $this->TableNames['users'] . " (Email, Username, PasswordHash) VALUES (?, ?, ?);");
+            $stmt->bind_param("sss", $email, $username, $password);
+
+            if(!$stmt->execute()){
+                throw new Exception("Failed to insert user in database. Maybe there is already a user with the same username or email");
+            }
+
+            /** Get just inserted full user from database */
+            $insertedUser = $this->Connection->query("SELECT * FROM " . $this->TableNames['users'] . " WHERE Id = " . $stmt->insert_id . ";");
+            $insertedUser =  $this->MapDbRowToUser($insertedUser->fetch_object());
+
+            $insertedUser->Roles = $user->Roles;
+            $insertedUser->Claims = $user->Claims;
+
+            return $this->UpdateRolesAndClaims($insertedUser);
+        }
+
+        public function UpdateUser($user){
+            $id = $user->Id;
+
+            if($id !== null) {
+                $username = $user->Username;
+                $email = $user->Email;
+                $emailConfirmed = $user->EmailConfirmed;
+                $passwordHash = $this->EncryptPassword($user->Password);
+                $deleted = $user->Deleted;
+
+                $query = "UPDATE " . $this->TableNames['users'] . " SET
+                    Username = IFNULL(?, Username),
+                    Email = IFNULL(?, Email),
+                    EmailConfirmed = IFNULL(?, EmailConfirmed),
+                    PasswordHash = IFNULL(?, PasswordHash),
+                    Deleted = IFNULL(?, Deleted) WHERE Id = ?";
+
+                $stmt = $this->Connection->prepare($query);
+                $stmt->bind_param("ssisii", $username, $email, $emailConfirmed, $passwordHash, $deleted, $id);
+            }
+            else{
+                throw new Exception("No id given. Can't update a user without id");
+            }
+
+            if(!$stmt->execute()){
+                throw new Exception("Error updating user: " . $stmt->error);
+            }
+
+            return $this->UpdateRolesAndClaims($user);
+        }
+
         private function EncryptPassword($password){
             $key = 5141589982687;
             for($i = 0; $i <= 65536; $i++){
@@ -61,7 +132,45 @@
             return $user;
         }
 
-        private function AddRoleIfNotExists($roleName){
+        private function UpdateRolesAndClaims($user){
+            $roles = $user->Roles;
+            $claims = $user->Claims;
+
+            if($user->Id === null){
+                throw new Exception("Can't update roles and claims without an id.");
+            }
+
+            $this->RemoveAllRolesAndClaims($user->Id);
+
+            if(is_array($roles)) {
+                foreach ($roles as $role) {
+                    /** Add roles if not exists */
+                    $roleId = $this->AddRoleIfNotExists($role);
+
+                    /** Add or remove user to/from roles  */
+                    $this->LinkUserToRole($user->Id, $roleId);
+                }
+            }
+
+            if(is_array($claims)) {
+                foreach ($claims as $claim => $claimValue) {
+                    /** Add claims if not exists */
+                    $claimId = $this->AddClaimIfNotExist($claim);
+
+                    /** Set value for claims */
+                    $this->SetClaimForUser($user->Id, $claimId, $claimValue);
+                }
+            }
+
+            return $user;
+        }
+
+        private function RemoveAllRolesAndClaims($userId){
+            $query = "DELETE FROM user_claims WHERE User_Id = ?;";
+        }
+
+        private function AddRoleIfNotExists($roleName)
+        {
             $stmt = $this->Connection->prepare("INSERT INTO " . $this->TableNames['roles'] . " SET Role = ?;");
             $stmt->bind_param("s", $roleName);
             if($stmt->execute()){
@@ -81,7 +190,7 @@
 
         private function LinkUserToRole($userId, $roleId)
         {
-            $stmt = $this->Connection->prepare("INSERT INTO " . $this->TableNames['userRoles'] . " (User_Id, Role_Id) VALUES (?, ?)");
+            $stmt = $this->Connection->prepare("REPLACE INTO " . $this->TableNames['userRoles'] . " (User_Id, Role_Id) VALUES (?, ?)");
             $stmt->bind_param("ii", $userId, $roleId);
             if(!$stmt->execute()){
                 throw new Exception("Error by insert of junction table user_roles");
@@ -106,107 +215,12 @@
             }
         }
 
-        private function SetClaimForUser($userId, $claimId, $claimValue){
+        private function SetClaimForUser($userId, $claimId, $claimValue)
+        {
             $stmt = $this->Connection->prepare("INSERT INTO " . $this->TableNames['userClaims'] . " (User_Id, Claim_Id, Claim_Value) VALUES (?, ? , ?) ON DUPLICATE KEY UPDATE Claim_Value = ?");
             $stmt->bind_param("iiss", $userId, $claimId, $claimValue, $claimValue);
-
-
-
-        }
-
-        public function InsertUser($user)
-        {
-            /** Map properties from User object to local scope variables */
-            $username = $this->CheckPropertyIsNull($user->Username, "Username");
-            $email = $this->CheckPropertyIsNull($user->Email, "Email");
-            $password = $this->EncryptPassword($this->CheckPropertyIsNull($user->Username, "Username"));
-
-            $roles = $user->Roles;
-            $claims = $user->Claims;
-
-            /** Insert user to database */
-            $stmt = $this->Connection->prepare("INSERT INTO " . $this->TableNames['users'] . " (Email, Username, PasswordHash) VALUES (?, ?, ?);");
-            $stmt->bind_param("sss", $email, $username, $password);
-
             if(!$stmt->execute()){
-                throw new Exception("Failed to insert user in database. Maybe there is already a user with the same username or email");
+                throw new Exception("Error by insert of junction table user_claims");
             }
-
-            /** Get just inserted full user from database */
-            $insertedUser = $this->Connection->query("SELECT * FROM " . $this->TableNames['users'] . " WHERE Id = " . $stmt->insert_id . ";");
-            $insertedUser =  $this->MapDbRowToUser($insertedUser->fetch_object());
-
-            if($roles !== null) {
-                foreach ($roles as $role) {
-                    /** Add roles if not exists */
-                    $roleId = $this->AddRoleIfNotExists($role);
-
-                    /** Add or remove user to/from roles  */
-                    $this->LinkUserToRole($insertedUser->Id, $roleId);
-                }
-            }
-
-            if($claims !== null) {
-                foreach ($claims as $claim => $claimValue) {
-                    /** Add claims if not exists */
-                    $claimId = $this->AddClaimIfNotExist($claim);
-
-                    /** Set value for claims */
-                    
-                }
-            }
-            return $insertedUser;
-        }
-
-        public function SelectAllUsers()
-        {
-            $stmt = $this->Connection->prepare("SELECT * FROM " . $this->TableNames['users']);
-            $stmt->execute();
-
-            while($row = $stmt->fetch()){
-                //var_dump($row);
-            }
-        }
-
-        public function SelectSingleUser($by, $value)
-        {
-
-        }
-
-        public function UpdateUser($user){
-            $id = $user->Id;
-            $username = $user->Username;
-            $email = $user->Email;
-            $emailConfirmed = $user->EmailConfirmed;
-            $passwordHash = $this->EncryptPassword($user->Password);
-            $deleted = $user->Deleted;
-
-            $query = "UPDATE " . $this->TableNames['users'] . " SET
-                Username = IFNULL(?, Username),
-                Email = IFNULL(?, Email),
-                EmailConfirmed = IFNULL(?, EmailConfirmed),
-                PasswordHash = IFNULL(?, PasswordHash),
-                Deleted = IFNULL(?, Deleted) ";
-
-            if($id !== null) {
-                $query .= "WHERE Id = ?";
-                $stmt = $this->Connection->prepare($query);
-                $stmt->bind_param("ssisii", $username, $email, $emailConfirmed, $passwordHash, $deleted, $id);
-            }
-            elseif($username !== null){
-                $query .= "WHERE Username = ?";
-                $stmt = $this->Connection->prepare($query);
-                $stmt->bind_param("ssisis", $username, $email, $emailConfirmed, $passwordHash, $deleted, $username);
-            }
-            elseif($email !== null){
-                $query .= "WHERE Email = ?";
-                $stmt = $this->Connection->prepare($query);
-                $stmt->bind_param("ssisis", $username, $email, $emailConfirmed, $passwordHash, $deleted, $email);
-            }
-            else{
-                throw new Exception("No unique property given. Can't update a user without unique property");
-            }
-
-            return $stmt->execute();
         }
     }
